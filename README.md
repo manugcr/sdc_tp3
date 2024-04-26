@@ -41,6 +41,27 @@ Coreboot es un firmware de código abierto diseñado para reemplazar el BIOS tra
 
 ---
 
+### Ejemplo ejecucion imagen QEMU
+Para ejecutar un programa en modo protegido hacemos uso de QEMU, un emulador de maquinas virtuales. Para instalarlo en Linux hacemos uso de apt:
+
+```bash
+$ sudo apt install qemu-system-x86
+```
+
+Para el primer programa se crea un sector de arranque y se corre el booteo virtualmente con QEMU:
+
+```bash
+$ printf '\364%509s\125\252' > main.img
+$ qemu-system-x86_64 --drive file=main.img,format=raw,index=0,media=disk
+```
+
+<p align="center">
+  <img src="./imgs/mbr_boot.png"><br>
+  <em>Fig 1. Basic boot example</em>
+</p>
+
+---
+
 ### Linker
 El linker es una herramienta que se utiliza en el proceso de compilación de programas para combinar múltiples archivos objeto en un solo ejecutable. El linker es responsable de resolver las referencias a símbolos entre los diferentes archivos objeto y generar un archivo ejecutable final que puede ser cargado y ejecutado por el sistema operativo. El linker también es responsable de asignar direcciones de memoria a los diferentes segmentos de código y datos del programa, así como de generar información adicional necesaria para el sistema operativo, como tablas de reubicación y tablas de símbolos.
 
@@ -63,12 +84,37 @@ SECTIONS
         SHORT(0xAA55)
     }
 }
-/*
-as -g -o main.o main.S
-ld --oformat binary -o main.img -T link.ld main.o
-qemu-system-x86_64 -hda main.img
-*/
 ```
 La direccion `0x7C00` hace referencia al lugar donde la BIOS carga el codigo de arranque desde el disco al iniciar el sistema, es decir el punto de inicio para la seccion de codigo `.text`.
 
 La direccion `0x1FE` asegura que los byes de arranque 0xAA55 se coloquen en la ultima posicion del sector de arranque de 512 bytes.
+
+Si quisieramos ejecutar este `hello world` en un sistema real, deberiamos grabar el archivo en un disco y bootear desde el mismo. Para este caso lo vamos a realizar en QEMU siendo este el codigo a compilar y luego linkear:
+
+```assembly
+.code16
+    mov $msg, %si
+    mov $0x0e, %ah
+loop:
+    lodsb
+    or %al, %al
+    jz halt
+    int $0x10
+    jmp loop
+halt:
+    hlt
+msg:
+    .asciz "hello world"
+
+```
+
+```bash
+$ as -g -o main.o main.S
+$ ld --oformat binary -o main.img -T link.ld main.o
+$ qemu-system-x86_64 -hda main.img
+```
+
+<p align="center">
+  <img src="./imgs/hello_world.png"><br>
+  <em>Fig 2. Hello World example</em>
+</p>
