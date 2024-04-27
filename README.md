@@ -67,7 +67,7 @@ El linker es una herramienta que se utiliza en el proceso de compilación de pro
 
 Para nuestro primer ejemplo de ejecucion en modo protegido vamos a realizar un `hello world`. Para ello hacemos uso de un script de un linker:
 
-```
+```bash
 SECTIONS
 {
     /* The BIOS loads the code from the disk to this location.
@@ -105,8 +105,9 @@ halt:
     hlt
 msg:
     .asciz "hello world"
-
 ```
+
+Estos tres comandos se emplean para compilar y ejecutar programas en sistemas x86_64. El primero, `as`, ensambla un archivo fuente en lenguaje ensamblador (`main.S`) en un archivo objeto (`main.o`). Luego, `ld` enlaza este archivo objeto para crear un archivo binario (`main.img`). La opción `--oformat binary` en `ld` especifica que el formato de salida del archivo debe ser binario, lo que significa que contendrá una secuencia de bytes sin ningún formato específico de archivo ejecutable. Finalmente, `qemu-system-x86_64` ejecuta el programa contenido en `main.img` en una máquina virtual, tratando este archivo como el disco duro de la máquina virtual.
 
 ```bash
 $ as -g -o main.o main.S
@@ -118,3 +119,31 @@ $ qemu-system-x86_64 -hda main.img
   <img src="./imgs/hello_world.png"><br>
   <em>Fig 2. Hello World example</em>
 </p>
+
+Podemos analizar los archivos binarios con `objdump` o `hexdump`, el primero se utiliza para analizar archivos objeto o ejecutables, incluyendo información sobre secciones, símbolos y código ensamblado. El segundo se utiliza para mostrar el contenido de un archivo en formato hexadecimal y ASCII.
+
+<p align="center">
+  <img src="./imgs/hexdump.png"><br>
+  <em>Fig 3. Hexdump of hello world img.</em>
+</p>
+
+Sobre este hexdump podemos ver como los primeros bytes `be 0f 7c b4 0e ac 08 c0  74 04 cd 10 eb f7 f4 68` corresponden a las instrucciones en x86 assembly.
+
+- `be 0f 7c` Movemos el valor de 0x7c0f al registro SI.
+- `b4 0e` Movemos el valor de 0x0e al registro AH.
+- `ac` Lodsb, carga el byte apuntado por SI en AL y aumenta SI.
+- `08 c0` Verifica si AL es 0.
+- `74 04` Si AL es 0, salta a halt.
+- `cd 10` Int 0x10, imprime el valor de AL en pantalla.
+- `eb f7` Salta a loop.
+
+El mensaje de `hello world` puede verse en la secuencia de bytes `68 65 6c 6c 6f 20 77 6f 72 6c 64 00`. 
+
+Los últimos dos bytes `55 aa` forman la firma de arranque, indicando que este es un disco de arranque válido.
+
+<p align="center">
+  <img src="./imgs/objdump.png"><br>
+  <em>Fig 4. objdump of hello world img.</em>
+</p>
+
+Utilizando objdump podemos ver que nuestro analisis es correcto y las instrucciones en assembly se corresponden con las instrucciones en el archivo binario. Algo que no podemos ver es que nuestro programa deberia iniciar en la direccion `0x7c00` pero tanto en objdump como en hexdump iniciamos en `0x0`.
