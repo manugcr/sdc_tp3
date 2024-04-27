@@ -55,6 +55,10 @@ $ printf '\364%509s\125\252' > main.img
 $ qemu-system-x86_64 --drive file=main.img,format=raw,index=0,media=disk
 ```
 
+- `\364` es el opcode de `hlt` == `0xf4` en x86.
+- `%509s` son 509 espacios hasta el byte 510.
+- `\125\252` es la firma de arranque `0x55` y `0xAA`.
+
 <p align="center">
   <img src="./imgs/mbr_boot.png"><br>
   <em>Fig 1. Basic boot example</em>
@@ -147,3 +151,30 @@ Los últimos dos bytes `55 aa` forman la firma de arranque, indicando que este e
 </p>
 
 Utilizando objdump podemos ver que nuestro analisis es correcto y las instrucciones en assembly se corresponden con las instrucciones en el archivo binario. Algo que no podemos ver es que nuestro programa deberia iniciar en la direccion `0x7c00` pero tanto en objdump como en hexdump iniciamos en `0x0`.
+
+---
+
+### Debugging con GDB
+
+Podemos depurar nuestro hello world utilizando gdb en conjunto con QEMU. Para ello ejecutamos el entorno con el siguiente comando, el cual gracias a las flags nos permite conectar gdb a QEMU:
+
+- `-s` Activa GDB stub en el puerto 1234.
+- `-S` Inicia QEMU en pausa.
+- `-monitor stdio` Permite interactuar con QEMU desde la terminal.
+
+```bash
+qemu-system-i386 -fda ../01HelloWorld/main.img -boot a -s -S -monitor stdio
+```
+
+Una vez iniciado QEMU, abrimos una nueva terminal y ejecutamos gdb. En el cual colocamos breakpoints al inicio del programa y en la direccion de memoria `0x7c00` y al terminar la interrupcion en `0x7c0c` por lo que si ejecutamos paso a paso veremos como la palabra `hello world` se imprime en pantalla caracter por caracter.
+
+<p align="center">
+  <img src="./imgs/gdb1.png"><br>
+  <em>Fig 5. GDB debugging hello world.</em>
+</p>
+
+---
+
+### Modo Protegido
+
+(...)
