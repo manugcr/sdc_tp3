@@ -166,7 +166,7 @@ Podemos depurar nuestro hello world utilizando gdb en conjunto con QEMU. Para el
 qemu-system-i386 -fda ../01HelloWorld/main.img -boot a -s -S -monitor stdio
 ```
 
-Una vez iniciado QEMU, abrimos una nueva terminal y ejecutamos gdb. En el cual colocamos breakpoints al inicio del programa y en la direccion de memoria `0x7c00` y al terminar la interrupcion en `0x7c0c` por lo que si ejecutamos paso a paso veremos como la palabra `hello world` se imprime en pantalla caracter por caracter.
+Una vez iniciado QEMU, abrimos una nueva terminal y ejecutamos gdb, para linkear nuestro QEMU con gdb primero ejecutamos dentro de gdb el comando `target remote localhost:1234`, luego colocamos breakpoints al inicio del programa y en la direccion de memoria `0x7c00` y al terminar la interrupcion en `0x7c0c` por lo que si ejecutamos paso a paso veremos como la palabra `hello world` se imprime en pantalla caracter por caracter.
 
 <p align="center">
   <img src="./imgs/gdb1.png"><br>
