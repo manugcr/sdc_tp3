@@ -177,4 +177,149 @@ Una vez iniciado QEMU, abrimos una nueva terminal y ejecutamos gdb, para linkear
 
 ### Modo Protegido
 
-(...)
+El modo real es el estado de funcionamiento inicial de un procesador x86 cuando se enciende. En este modo, el procesador está limitado a un direccionamiento de memoria de 1 MB y no cuenta con protección de memoria ni privilegios de usuario. 
+
+El modo protegido, por otro lado, ofrece un modelo de memoria más avanzado y flexible. En este modo, se permite el direccionamiento lineal de hasta 4 GB de memoria, y se utiliza la paginación para administrar la memoria física de manera más eficiente.
+
+En términos de protección y privilegios, el modo protegido implementa un modelo de protección de memoria robusto. La memoria se organiza en segmentos, y cada segmento tiene atributos de protección que controlan el acceso y los privilegios de escritura o ejecución. Además, se utilizan niveles de privilegio (anillos) para restringir qué partes del sistema pueden realizar ciertas operaciones. Hay cuatro niveles de privilegio, donde 0 es el más privilegiado y 3 es el menos privilegiado.
+
+Los interruptores de modo en el modo protegido son más sofisticados y seguros. Se utilizan instrucciones especiales, como las llamadas de puerta y las interrupciones de puerta, para cambiar de nivel de privilegio de manera controlada y segura. Además, se utiliza un descriptor de tarea para cambiar entre tareas de manera más eficiente y segura, lo que mejora la gestión multitarea y el aislamiento entre procesos.
+
+#### GDT
+La GDT es una estructura de datos esencial en arquitecturas x86 utilizada para describir los diferentes segmentos de memoria que puede acceder el procesador. En el contexto del cambio de modo de operación, la GDT es especialmente importante porque define cómo se organiza y administra la memoria en modo protegido.
+
+En este código, la GDT se define como una serie de descriptores, cada uno de los cuales describe un segmento de memoria. Cada descriptor de segmento especifica características importantes, como el límite del segmento, la dirección base, los permisos de acceso y otros atributos.
+
+#### Cambio a modo protegido
+El proceso de cambio de modo real a modo protegido consta de varios pasos clave, que se describen a continuación.
+
+Primero, el código deshabilita las interrupciones mediante la instrucción `cli`. Esto asegura que no se interrumpa el proceso de cambio de modo.
+
+Luego, se carga la Tabla de Descriptores Globales (GDT) utilizando la instrucción `lgdt`, que carga la dirección base y el tamaño de la GDT.
+
+Se modifica el registro de control CR0. Aca es donde ocurre el cambio de modo: el bit de habilitación de protección (PE) se establece en 1, lo que indica al procesador que cambie al modo protegido.
+
+Una vez que se ha activado el modo protegido, se realiza un salto a una etiqueta denominada `protected_mode`, que marca el inicio del código en modo protegido.
+
+Dentro de la sección `protected_mode`, se inicializa el puntero de pila (ebp y esp) para asegurar que el programa tenga un espacio de pila adecuado para trabajar en modo protegido y se imprime un mensaje en pantalla si es que se ha logrado el cambio de modo.
+
+```asm
+.equ CODE_SEG, gdt_code - gdt_start
+.equ DATA_SEG, gdt_data - gdt_start
+
+; Switch to protected mode
+.code16
+switch_to_protected_mode:
+    cli                                 ; Disable interrupts
+    lgdt gdt_descriptor                 ; Load the Global Descriptor Table (GDT)
+    
+    ; Load Control Register CR0 and set the Protection Enable (PE) bit to 1
+    mov %cr0, %eax
+    orl $0x1, %eax
+    mov %eax, %cr0
+    
+    ljmp $CODE_SEG, $protected_mode
+
+
+; Global Descriptor Table (GDT)
+gdt_start:
+    ; Null descriptor
+    gdt_null:
+        .long 0x0                       ; Null segment descriptor - limit
+        .long 0x0                       ; Base address
+
+    ; Code descriptor
+    gdt_code:
+        .word 0xffff                    ; Segment limit (lower 16 bits)
+        .word 0x0                       ; Base address (lower 16 bits)
+        .byte 0x0                       ; Base address (middle 8 bits)
+        .byte 0b10011010                ; Flags: Present, Privilege Level 0, Code Segment, Executable, Readable
+        .byte 0b11001111                ; Flags: Granularity (4KB), 32-bit mode, Limit (upper 4 bits)
+        .byte 0x0                       ; Base address (upper 8 bits)
+
+    ; Data descriptor
+    gdt_data:
+        .word 0xffff                    ; Segment limit (lower 16 bits)
+        .word 0x0                       ; Base address (lower 16 bits)
+        .byte 0x0                       ; Base address (middle 8 bits)
+        .byte 0b10010010                ; Flags: Present, Privilege Level 0, Data Segment, Readable, Writable
+        .byte 0b11001111                ; Flags: Granularity (4KB), 32-bit mode, Limit (upper 4 bits)
+        .byte 0x0                       ; Base address (upper 8 bits)
+
+    gdt_end:
+
+    ; GDT descriptor
+    gdt_descriptor:
+        .word gdt_end - gdt_start - 1   ; Limit of GDT (size - 1)
+        .long gdt_start                 ; Base address of GDT
+
+
+; Protected mode initialization
+.code32
+protected_mode:
+    ; Initialize stack pointer
+    mov $0x7000, %ebp
+    mov %ebp, %esp
+    
+    ; Call the check_protected_mode function
+    call check_protected_mode
+
+    hlt
+
+
+; Check if in protected mode and print message
+check_protected_mode:
+    mov %cr0, %eax                      ; Load Control Register CR0
+    test $0x1, %eax                     ; Test the PE bit (bit 0)
+    jnz protected_mode_detected         ; Jump if PE bit is set (in protected mode)
+    jmp not_in_protected_mode
+protected_mode_detected:
+    ; Processor is in protected mode
+    call print_message
+    jmp continue_execution
+not_in_protected_mode:
+    ; Processor is not in protected mode
+    hlt
+continue_execution:
+    ; Continue with the program execution
+
+
+; Print message on VGA
+print_message:
+    mov $message, %ecx                  ; Load the address of the message into ECX
+    mov vga, %eax                       ; Load the address of the VGA buffer into EAX
+    
+    ; Calculate VGA memory address
+    mov $160, %edx
+    mul %edx
+    lea 0xb8000(%eax), %edx
+    mov $0x0f, %ah 
+loop:
+    mov (%ecx), %al                     ; Load the character from the message into AL
+    cmp $0, %al                         ; Check for the end of the message
+    je end
+    
+    mov %ax, (%edx)                     ; Write the character to the VGA buffer
+    
+    ; Move to the next character in the message and VGA buffer
+    add $1, %ecx
+    add $2, %edx
+    jmp loop
+end:
+    ret
+
+; Message to be printed on VGA
+message:
+    .asciz "Successfully switched to protected mode."
+
+; VGA buffer address
+vga:
+    .long 10
+```
+
+En la siguiente imagen podemos ver como se realiza el cambio de modo de operacion de real a protegido. Utilizando el script de linker anteriormente mencionado, se compila y se ejecuta el codigo en QEMU.
+
+<p align="center">
+  <img src="./imgs/pm1.png"><br>
+  <em>Fig 6. Entering protected mode.</em>
+</p>
