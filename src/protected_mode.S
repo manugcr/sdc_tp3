@@ -4,14 +4,15 @@
 /* Switch to protected mode */
 .code16
 switch_to_protected_mode:
-    cli                                 /* Disable interrupts */
-    lgdt gdt_descriptor                 /* Load the Global Descriptor Table (GDT) */
+    cli                                 /* Step 0. Disable interrupts */
+    lgdt gdt_descriptor                 /* Step 1. Load the Global Descriptor Table (GDT) */
     
-    /* Load Control Register CR0 and set the Protection Enable (PE) bit to 1 */
+    /* Step 2. Load Control Register CR0 and set the Protection Enable (PE) bit to 1 */
     mov %cr0, %eax
     orl $0x1, %eax
     mov %eax, %cr0
     
+    /* Step 3. Jump to 32bits code section. */
     ljmp $CODE_SEG, $protected_mode
 
 
@@ -51,14 +52,21 @@ gdt_start:
 /* Protected mode initialization */
 .code32
 protected_mode:
-    /* Initialize stack pointer */
+    /* Initialize the registers and stack pointer */
+    mov $DATA_SEG, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+    mov %ax, %ss
+    mov $0x7000, %ebp
+    mov %ebp, %esp
+
     mov $0x7000, %ebp
     mov %ebp, %esp
     
-    /* Call the check_protected_mode function */
-    call check_protected_mode
-
-    hlt
+    /* Jump the check_protected_mode function */
+    jmp check_protected_mode
 
 
 /* Check if in protected mode and print message */
@@ -76,6 +84,7 @@ not_in_protected_mode:
     hlt
 continue_execution:
     /* Continue with the program execution */
+    hlt
 
 
 /* Print message on VGA */
