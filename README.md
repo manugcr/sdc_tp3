@@ -30,6 +30,11 @@ MBR (Master Boot Register) es un esquema de partición heredado utilizado en dis
 
 Por otro lado, GPT (GUID Partition Table) es un estándar más reciente y avanzado para la organización de particiones en discos duros y unidades de almacenamiento. A diferencia de MBR, GPT utiliza una estructura de tabla de particiones más flexible y moderna. Está ubicado al principio del disco y también contiene una copia de respaldo al final del disco para mayor redundancia. GPT permite un mayor número de particiones (hasta 128) y no tiene las limitaciones de tamaño de partición que tiene MBR. Además, GPT proporciona una mayor robustez y resistencia a errores debido a la verificación de integridad de la tabla de particiones y la detección de corrupción de datos.
 
+<p align="center">
+  <img src="./imgs/mbr_struct.png"><br>
+  <em>Fig 0. MBR structure.</em>
+</p>
+
 ### Casos de bugs en UEFI
 Un caso reciente que deja vulnerable al sistema es el llamado "LogoFAIL". Lo que este hace es, desde el sistema operativo, cambiar la imagen del ordenador que se muestra durante el arranque, por otra que logra acceder a las funciones de carga de la misma. Esto se carga en el firmware UEFI, por lo que un simple formateo o cambio de disco no solucionará el problema. Se podría decir que se un caso de exploit, ya que al tener este acceso, se puede cargar código malicioso y comprometer el equipo.
 
@@ -48,7 +53,9 @@ Para ejecutar un programa en modo protegido hacemos uso de QEMU, un emulador de 
 $ sudo apt install qemu-system-x86
 ```
 
-Para el primer programa se crea un sector de arranque y se corre el booteo virtualmente con QEMU:
+Para el primer programa se crea un sector de arranque y se corre el booteo virtualmente con QEMU, en la arquitectura x86 lo mas simple es crear un sector de arranque de 512 bytes y correrlo con QEMU.
+
+Para ello se crea un archivo de 512 bytes con el siguiente comando:
 
 ```bash
 $ printf '\364%509s\125\252' > main.img
@@ -59,9 +66,10 @@ $ qemu-system-x86_64 --drive file=main.img,format=raw,index=0,media=disk
 - `%509s` son 509 espacios hasta el byte 510.
 - `\125\252` es la firma de arranque `0x55` y `0xAA`.
 
+
 <p align="center">
   <img src="./imgs/mbr_boot.png"><br>
-  <em>Fig 1. Basic boot example</em>
+  <em>Fig 1. Basic boot example.</em>
 </p>
 
 ---
@@ -89,9 +97,9 @@ SECTIONS
     }
 }
 ```
-La direccion `0x7C00` hace referencia al lugar donde la BIOS carga el codigo de arranque desde el disco al iniciar el sistema, es decir el punto de inicio para la seccion de codigo `.text`.
+La direccion `0x7C00` en el contexto de sistemas x86, la BIOS carga el sector de arranque (boot sector) del disco en la memoria RAM. Este sector de arranque es el primer sector del disco y contiene el código inicial que se ejecuta al iniciar el sistema. Su tamaño es de 512 bytes, y está ubicado en el sector de arranque del disco.
 
-La direccion `0x1FE` asegura que los byes de arranque 0xAA55 se coloquen en la ultima posicion del sector de arranque de 512 bytes.
+La dirección `0x1FE` es el byte final del sector de arranque, que tiene una longitud de 512 bytes, esta dirección se utiliza para colocar los "magic boot bytes". Estos "magic boot bytes" consisten típicamente en el valor hexadecimal 0xAA55, que es una firma especial que indica a la BIOS que el dispositivo es un dispositivo de arranque válido.
 
 Si quisieramos ejecutar este `hello world` en un sistema real, deberiamos grabar el archivo en un disco y bootear desde el mismo. Para este caso lo vamos a realizar en QEMU siendo este el codigo a compilar y luego linkear:
 
@@ -203,123 +211,56 @@ Una vez que se ha activado el modo protegido, se realiza un salto a una etiqueta
 
 Dentro de la sección `protected_mode`, se inicializa el puntero de pila (ebp y esp) para asegurar que el programa tenga un espacio de pila adecuado para trabajar en modo protegido y se imprime un mensaje en pantalla si es que se ha logrado el cambio de modo.
 
-```asm
-.equ CODE_SEG, gdt_code - gdt_start
-.equ DATA_SEG, gdt_data - gdt_start
-
-; Switch to protected mode
-.code16
-switch_to_protected_mode:
-    cli                                 ; Disable interrupts
-    lgdt gdt_descriptor                 ; Load the Global Descriptor Table (GDT)
-    
-    ; Load Control Register CR0 and set the Protection Enable (PE) bit to 1
-    mov %cr0, %eax
-    orl $0x1, %eax
-    mov %eax, %cr0
-    
-    ljmp $CODE_SEG, $protected_mode
-
-
-; Global Descriptor Table (GDT)
-gdt_start:
-    ; Null descriptor
-    gdt_null:
-        .long 0x0                       ; Null segment descriptor - limit
-        .long 0x0                       ; Base address
-
-    ; Code descriptor
-    gdt_code:
-        .word 0xffff                    ; Segment limit (lower 16 bits)
-        .word 0x0                       ; Base address (lower 16 bits)
-        .byte 0x0                       ; Base address (middle 8 bits)
-        .byte 0b10011010                ; Flags: Present, Privilege Level 0, Code Segment, Executable, Readable
-        .byte 0b11001111                ; Flags: Granularity (4KB), 32-bit mode, Limit (upper 4 bits)
-        .byte 0x0                       ; Base address (upper 8 bits)
-
-    ; Data descriptor
-    gdt_data:
-        .word 0xffff                    ; Segment limit (lower 16 bits)
-        .word 0x0                       ; Base address (lower 16 bits)
-        .byte 0x0                       ; Base address (middle 8 bits)
-        .byte 0b10010010                ; Flags: Present, Privilege Level 0, Data Segment, Readable, Writable
-        .byte 0b11001111                ; Flags: Granularity (4KB), 32-bit mode, Limit (upper 4 bits)
-        .byte 0x0                       ; Base address (upper 8 bits)
-
-    gdt_end:
-
-    ; GDT descriptor
-    gdt_descriptor:
-        .word gdt_end - gdt_start - 1   ; Limit of GDT (size - 1)
-        .long gdt_start                 ; Base address of GDT
-
-
-; Protected mode initialization
-.code32
-protected_mode:
-    ; Initialize stack pointer
-    mov $0x7000, %ebp
-    mov %ebp, %esp
-    
-    ; Call the check_protected_mode function
-    call check_protected_mode
-
-    hlt
-
-
-; Check if in protected mode and print message
-check_protected_mode:
-    mov %cr0, %eax                      ; Load Control Register CR0
-    test $0x1, %eax                     ; Test the PE bit (bit 0)
-    jnz protected_mode_detected         ; Jump if PE bit is set (in protected mode)
-    jmp not_in_protected_mode
-protected_mode_detected:
-    ; Processor is in protected mode
-    call print_message
-    jmp continue_execution
-not_in_protected_mode:
-    ; Processor is not in protected mode
-    hlt
-continue_execution:
-    ; Continue with the program execution
-
-
-; Print message on VGA
-print_message:
-    mov $message, %ecx                  ; Load the address of the message into ECX
-    mov vga, %eax                       ; Load the address of the VGA buffer into EAX
-    
-    ; Calculate VGA memory address
-    mov $160, %edx
-    mul %edx
-    lea 0xb8000(%eax), %edx
-    mov $0x0f, %ah 
-loop:
-    mov (%ecx), %al                     ; Load the character from the message into AL
-    cmp $0, %al                         ; Check for the end of the message
-    je end
-    
-    mov %ax, (%edx)                     ; Write the character to the VGA buffer
-    
-    ; Move to the next character in the message and VGA buffer
-    add $1, %ecx
-    add $2, %edx
-    jmp loop
-end:
-    ret
-
-; Message to be printed on VGA
-message:
-    .asciz "Successfully switched to protected mode."
-
-; VGA buffer address
-vga:
-    .long 10
-```
-
 En la siguiente imagen podemos ver como se realiza el cambio de modo de operacion de real a protegido. Utilizando el script de linker anteriormente mencionado, se compila y se ejecuta el codigo en QEMU.
+
+```bash
+sdc_tp3/src$ sh build.sh
+```
 
 <p align="center">
   <img src="./imgs/pm1.png"><br>
   <em>Fig 6. Entering protected mode.</em>
 </p>
+
+#### Bits de acceso solo lectura.
+Si cambiaramos los bits de acceso del segmento de datos para que sea de solo lectura, intentar escribir en el mismo generaria un problema en la ejecucion del sistema, tal como veremos en la siguiente imagen, la cual queda indefinidamente en la instruccion `add`.         
+
+```assembly
+    ; Data descriptor
+    gdt_data:
+        .word 0xffff                    
+        .word 0x0                       
+        .byte 0x0       
+        ; .byte 0b10010010                            
+        .byte 0b10010000                ; Modified to Read Only
+        .byte 0b11001111                
+        .byte 0x0                       
+```
+
+<p align="center">
+  <img src="./imgs/gdb2.png"><br>
+  <em>Fig 7. Read only protected mode.</em>
+</p>
+
+---
+
+**1. ¿Cómo sería un programa que tenga dos descriptores de memoria diferentes, uno para cada segmento (código y datos) en espacios de memoria diferenciados?**
+
+(...)
+
+**2. En modo protegido, ¿Con qué valor se cargan los registros de segmento? ¿Porque?** 
+
+En modo protegido, los registros de segmento se cargan con selectores de segmento, que son números de 16 bits que apuntan a entradas en la GDT. Estos selectores no contienen direcciones directas de segmento, sino índices que señalan a descriptores de segmento en la GDT. Esto proporciona flexibilidad y seguridad al permitir la definición de características específicas para cada segmento, como permisos de acceso y nivel de privilegio, y permite la segmentación virtual para gestionar la memoria de manera más eficiente.
+
+```assembly
+; Protected mode initialization
+.code32
+protected_mode:
+    ; Initialize the registers and stack pointer
+    mov $DATA_SEG, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+    mov %ax, %ss
+```
