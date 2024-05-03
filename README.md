@@ -1,9 +1,10 @@
 # Sistemas de Computacion
 Trabajo Practico 3 - Modo Protegido
 
-- Gil Cernich, Manuel
-- Pallardo, Agustin
-- Saporito, Franco
+**Integrantes:**
+- [Gil Cernich, Manuel](https://github.com/manugcr/)
+- [Pallardo, Agustin](https://github.com/djpallax)
+- [Saporito, Franco](https://github.com/fasaporito)
 
 ---
 
