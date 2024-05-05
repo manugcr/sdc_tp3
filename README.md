@@ -247,7 +247,15 @@ Si cambiaramos los bits de acceso del segmento de datos para que sea de solo lec
 
 **1. ¿Cómo sería un programa que tenga dos descriptores de memoria diferentes, uno para cada segmento (código y datos) en espacios de memoria diferenciados?**
 
-(...)
+Un programa que tenga dos descriptores de memoria diferentes, deberá definir dos descriptores de segmento. Estos podrían ser "data_segment" y "code_segment". En el _start, se deberá especificar hacia dónde apuntarán estos.
+
+```assembly
+_start:
+    mov ax, 0x08
+    mov ds, ax      ; Data segment
+    mov ax, 0x10
+    mov es, ax      ; Code segment
+```
 
 **2. En modo protegido, ¿Con qué valor se cargan los registros de segmento? ¿Porque?** 
 
